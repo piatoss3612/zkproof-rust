@@ -5,12 +5,12 @@ pub fn exponentiate(n: &BigUint, exponent: &BigUint, modulus: &BigUint) -> BigUi
     n.modpow(exponent, modulus)
 }
 
-// s = k - c * x mod p
-pub fn solve(k: &BigUint, c: &BigUint, x: &BigUint, p: &BigUint) -> BigUint {
+// s = k - c * x mod q
+pub fn solve(k: &BigUint, c: &BigUint, x: &BigUint, q: &BigUint) -> BigUint {
     if *k >= c * x {
-        (k - c * x).modpow(&BigUint::from(1u32), p)
+        (k - c * x).modpow(&BigUint::from(1u32), q)
     } else {
-        p - (c * x - k).modpow(&BigUint::from(1u32), p)
+        q - (c * x - k).modpow(&BigUint::from(1u32), q)
     }
 }
 
