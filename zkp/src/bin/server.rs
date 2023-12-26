@@ -75,7 +75,7 @@ impl Auth for AuthImpl {
         if let Some(user_info) = user_info_map.get_mut(&username) {
             let (_, _, _, q) = ZKP::get_constants();
             let c = ZKP::generate_random_number(&q);
-            let auth_id = "1234567890".to_string();
+            let auth_id = ZKP::generate_random_string(12);
 
             user_info.r1 = r1;
             user_info.r2 = r2;
@@ -103,7 +103,45 @@ impl Auth for AuthImpl {
     ) -> std::result::Result<
         tonic::Response<AuthenticationAnswerResponse>,
         tonic::Status,
-    > {todo!()}
+    > {
+        let request = request.into_inner();
+
+        let auth_id = request.auth_id;
+        let s = BigUint::from_bytes_be(request.s.as_slice());
+        
+        let  auth_id_to_user_map = self.auth_id_to_user.lock().unwrap();
+
+        if let Some(username) = auth_id_to_user_map.get(&auth_id) {
+            let mut user_info_map = self.user_info.lock().unwrap();
+
+            if let Some(user_info) = user_info_map.get_mut(username) {
+                let (alpha, beta, p, q) = ZKP::get_constants();
+                let zkp = ZKP {
+                    alpha,
+                    beta,
+                    p,
+                    q,
+                };
+
+                let verified = zkp.verify(
+                 &user_info.r1, &user_info.r2, 
+                 &user_info.y1, &user_info.y2, 
+                 &user_info.c, &s);
+
+                if !verified {
+                    return Err(Status::new(Code::InvalidArgument, format!("Invalid proof")));
+                }
+
+                Ok(Response::new(AuthenticationAnswerResponse{
+                    session_id: user_info.session_id.clone(),
+                }))
+            } else {
+                return Err(Status::new(Code::NotFound, format!("User {} not found", username)));
+            }
+        } else {
+            return Err(Status::new(Code::NotFound, format!("Auth id {} not found", auth_id)));
+        }
+    }
 }
 
 
