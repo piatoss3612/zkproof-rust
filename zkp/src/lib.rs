@@ -1,3 +1,5 @@
+pub mod zkp_auth;
+
 use num_bigint::{BigUint, RandBigInt};
 use rand::thread_rng;
 

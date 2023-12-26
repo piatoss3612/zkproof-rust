@@ -8,6 +8,18 @@ edition = "2021"
 [dependencies]
 rand = "0.8"
 num-bigint = { version = "0.4", features = ["rand"] }
+hex = "0.4"
+tonic = "0.10"
+prost = "0.12"
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"]} # async runtime
 
 [build-dependencies]
 tonic-build = "0.10"
+
+[[bin]]
+name = "server"
+path = "src/bin/server.rs"
+
+[[bin]]
+name = "client"
+path = "src/bin/client.rs"
