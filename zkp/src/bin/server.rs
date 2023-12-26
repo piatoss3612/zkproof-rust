@@ -1,14 +1,16 @@
 use std::{collections::HashMap, sync::Mutex};
 
 use num_bigint::BigUint;
-use tonic::{transport::Server, Response};
+use tonic::{transport::Server, Response, Status, Code};
 use zkp::zkp_auth::{auth_server::{Auth, AuthServer}, RegisterRequest, RegisterResponse, AuthenticationChallendgeRequest, AuthenticationChallendgeResponse, AuthenticationAnswerRequest, AuthenticationAnswerResponse};
+use zkp::ZKP;
 
 extern crate zkp;
 
 #[derive(Debug, Default)]
 pub struct AuthImpl {
     pub user_info: Mutex<HashMap<String, UserInfo>>,
+    pub auth_id_to_user: Mutex<HashMap<String, String>>,
 }
 
 #[derive(Debug, Default)]
@@ -55,13 +57,46 @@ impl Auth for AuthImpl {
 
         Ok(Response::new(RegisterResponse::default()))
     }
+
     async fn create_authentication_challenge(
         &self,
         request: tonic::Request<AuthenticationChallendgeRequest>,
     ) -> std::result::Result<
         tonic::Response<AuthenticationChallendgeResponse>,
         tonic::Status,
-    > {todo!()}
+    > {
+        let request = request.into_inner();
+
+        let username = request.user;
+        let r1 = BigUint::from_bytes_be(request.r1.as_slice());
+        let r2 = BigUint::from_bytes_be(request.r2.as_slice());
+
+        let mut user_info_map = self.user_info.lock().unwrap();
+        if let Some(user_info) = user_info_map.get_mut(&username) {
+            let (_, _, _, q) = ZKP::get_constants();
+            let c = ZKP::generate_random_number(&q);
+            let auth_id = "1234567890".to_string();
+
+            user_info.r1 = r1;
+            user_info.r2 = r2;
+            user_info.c = c.clone();
+            user_info.session_id = auth_id.clone();
+
+            let mut auth_id_to_user_map = self.auth_id_to_user.lock().unwrap();
+
+            auth_id_to_user_map.insert(auth_id.clone(), username.clone());
+
+            println!("Successfully created authentication challenge");
+
+            Ok(Response::new(AuthenticationChallendgeResponse{
+                c: c.to_bytes_be(),
+                auth_id,
+            }))
+        } else {
+            return Err(Status::new(Code::NotFound, format!("User {} not found", username)));
+        }
+    }
+
     async fn verify_authentication(
         &self,
         request: tonic::Request<AuthenticationAnswerRequest>,
