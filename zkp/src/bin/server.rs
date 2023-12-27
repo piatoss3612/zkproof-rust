@@ -1,8 +1,12 @@
 use std::{collections::HashMap, sync::Mutex};
 
 use num_bigint::BigUint;
-use tonic::{transport::Server, Response, Status, Code};
-use zkp::zkp_auth::{auth_server::{Auth, AuthServer}, RegisterRequest, RegisterResponse, AuthenticationChallendgeRequest, AuthenticationChallendgeResponse, AuthenticationAnswerRequest, AuthenticationAnswerResponse};
+use tonic::{transport::Server, Code, Response, Status};
+use zkp::zkp_auth::{
+    auth_server::{Auth, AuthServer},
+    AuthenticationAnswerRequest, AuthenticationAnswerResponse, AuthenticationChallendgeRequest,
+    AuthenticationChallendgeResponse, RegisterRequest, RegisterResponse,
+};
 use zkp::ZKP;
 
 extern crate zkp;
@@ -35,10 +39,7 @@ impl Auth for AuthImpl {
     async fn register(
         &self,
         request: tonic::Request<RegisterRequest>,
-    ) -> std::result::Result<
-        tonic::Response<RegisterResponse>,
-        tonic::Status,
-    > {
+    ) -> std::result::Result<tonic::Response<RegisterResponse>, tonic::Status> {
         let request = request.into_inner();
 
         let username = request.user;
@@ -61,10 +62,7 @@ impl Auth for AuthImpl {
     async fn create_authentication_challenge(
         &self,
         request: tonic::Request<AuthenticationChallendgeRequest>,
-    ) -> std::result::Result<
-        tonic::Response<AuthenticationChallendgeResponse>,
-        tonic::Status,
-    > {
+    ) -> std::result::Result<tonic::Response<AuthenticationChallendgeResponse>, tonic::Status> {
         let request = request.into_inner();
 
         let username = request.user;
@@ -88,62 +86,66 @@ impl Auth for AuthImpl {
 
             println!("Successfully created authentication challenge");
 
-            Ok(Response::new(AuthenticationChallendgeResponse{
+            Ok(Response::new(AuthenticationChallendgeResponse {
                 c: c.to_bytes_be(),
                 auth_id,
             }))
         } else {
-            return Err(Status::new(Code::NotFound, format!("User {} not found", username)));
+            return Err(Status::new(
+                Code::NotFound,
+                format!("User {} not found", username),
+            ));
         }
     }
 
     async fn verify_authentication(
         &self,
         request: tonic::Request<AuthenticationAnswerRequest>,
-    ) -> std::result::Result<
-        tonic::Response<AuthenticationAnswerResponse>,
-        tonic::Status,
-    > {
+    ) -> std::result::Result<tonic::Response<AuthenticationAnswerResponse>, tonic::Status> {
         let request = request.into_inner();
 
         let auth_id = request.auth_id;
         let s = BigUint::from_bytes_be(request.s.as_slice());
-        
-        let  auth_id_to_user_map = self.auth_id_to_user.lock().unwrap();
+
+        let auth_id_to_user_map = self.auth_id_to_user.lock().unwrap();
 
         if let Some(username) = auth_id_to_user_map.get(&auth_id) {
             let mut user_info_map = self.user_info.lock().unwrap();
 
             if let Some(user_info) = user_info_map.get_mut(username) {
                 let (alpha, beta, p, q) = ZKP::get_constants();
-                let zkp = ZKP {
-                    alpha,
-                    beta,
-                    p,
-                    q,
-                };
+                let zkp = ZKP { alpha, beta, p, q };
 
                 let verified = zkp.verify(
-                 &user_info.r1, &user_info.r2, 
-                 &user_info.y1, &user_info.y2, 
-                 &user_info.c, &s);
+                    &user_info.r1,
+                    &user_info.r2,
+                    &user_info.y1,
+                    &user_info.y2,
+                    &user_info.c,
+                    &s,
+                );
 
                 if !verified {
                     return Err(Status::new(Code::InvalidArgument, format!("Invalid proof")));
                 }
 
-                Ok(Response::new(AuthenticationAnswerResponse{
+                Ok(Response::new(AuthenticationAnswerResponse {
                     session_id: user_info.session_id.clone(),
                 }))
             } else {
-                return Err(Status::new(Code::NotFound, format!("User {} not found", username)));
+                return Err(Status::new(
+                    Code::NotFound,
+                    format!("User {} not found", username),
+                ));
             }
         } else {
-            return Err(Status::new(Code::NotFound, format!("Auth id {} not found", auth_id)));
+            return Err(Status::new(
+                Code::NotFound,
+                format!("Auth id {} not found", auth_id),
+            ));
         }
     }
 }
-
 
 #[tokio::main]
 async fn main() {
