@@ -1,0 +1,13 @@
+version: '3.9'
+services:
+  zkpserver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zkpserver
+    container_name: zkpserver
+    ports:
+      - "50051:50051"
+    environment:
+      - USER=piatoss
+    command: [ "/app/server" ]
